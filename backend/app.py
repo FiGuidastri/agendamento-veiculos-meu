@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -21,6 +22,10 @@ class User(db.Model):
 class Vehicle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), unique=True, nullable=False)
+    plate = db.Column(db.String(50), unique=True, nullable=False)
+    model = db.Column(db.String(100), nullable=False)
+    color = db.Column(db.String(50), nullable=False)
+    capacity = db.Column(db.Integer, nullable=False)
 
 class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +56,7 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(username=data['username']).first()
     if user and bcrypt.check_password_hash(user.password, data['password']):
-        access_token = create_access_token(identity={'username': user.username, 'is_master': user.is_master})
+        access_token = create_access_token(identity={'id': user.id, 'username': user.username, 'is_master': user.is_master})
         return jsonify(access_token=access_token)
     return jsonify(message="Invalid credentials"), 401
 
@@ -62,7 +67,13 @@ def add_vehicle():
     if not current_user['is_master']:
         return jsonify(message="Permission denied"), 403
     data = request.get_json()
-    new_vehicle = Vehicle(name=data['name'])
+    new_vehicle = Vehicle(
+        name=data['name'],
+        plate=data['plate'],
+        model=data['model'],
+        color=data['color'],
+        capacity=data['capacity']
+    )
     db.session.add(new_vehicle)
     db.session.commit()
     return jsonify(message="Vehicle added successfully!")
@@ -72,8 +83,8 @@ def add_vehicle():
 def add_schedule():
     data = request.get_json()
     vehicle_id = data['vehicle_id']
-    start_time = data['start_time']
-    end_time = data['end_time']
+    start_time = datetime.fromisoformat(data['start_time'])
+    end_time = datetime.fromisoformat(data['end_time'])
     existing_schedule = Schedule.query.filter(
         Schedule.vehicle_id == vehicle_id,
         Schedule.start_time < end_time,
